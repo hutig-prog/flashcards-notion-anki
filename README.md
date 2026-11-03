@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/34341751/README.md)
 # Flashcards com IA: Notion → n8n → Anki
 
 Automação que transforma anotações de aula do Notion em flashcards prontos para revisar no Anki, usando um modelo de linguagem (LLM) para gerar perguntas e respostas.
