@@ -1,0 +1,205 @@
+{
+  "name": "Flashcards Notiion -> Anki",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "27f8b600-3cfc-4ed9-9606-fced4047774f",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "operation": "getAll",
+        "blockId": {
+          "__rl": true,
+          "value": "COLE_AQUI_A_URL_DA_PAGINA",
+          "mode": "url"
+        },
+        "returnAll": true,
+        "fetchNestedBlocks": true
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4d2044d9-0e97-4d1b-bb9d-434112c960b2",
+      "name": "Get many child blocks",
+      "credentials": {
+        "notionApi": {
+          "id": "pgONWD7PucDTjMlJ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta o texto de todos os blocos do Notion em um único campo\nconst textos = [];\n\nfor (const item of $input.all()) {\n  const b = item.json;\n  let t = '';\n\n  if (typeof b.content === 'string') {\n    // formato simplificado do n8n\n    t = b.content;\n  } else if (b.type && b[b.type] && Array.isArray(b[b.type].rich_text)) {\n    // formato bruto da API do Notion\n    t = b[b.type].rich_text.map(r => r.plain_text).join('');\n  }\n\n  if (t.trim()) textos.push(t.trim());\n}\n\nreturn [{ json: { texto: textos.join('\\n'), blocos: textos.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "ca3a6047-693c-4a02-977a-96fad8fd0348",
+      "name": "Juntar texto"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Você é um professor de Defesa Cibernética. A partir das anotações abaixo, crie exatamente 10 flashcards em português do Brasil.\n\nRegras:\n- Uma ideia por card.\n- Frente: pergunta objetiva e clara.\n- Verso: resposta curta (no máximo 2 frases).\n- Use SOMENTE informações presentes nas anotações. Não invente nada.\n- Ignore links, nomes de arquivos e títulos de seção sem conteúdo.\n- Responda APENAS com um array JSON, sem texto antes ou depois e sem markdown, no formato:\n[{\"frente\": \"pergunta\", \"verso\": \"resposta\"}]\n\nAnotações:\n{{ $json.texto }}",
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        672,
+        0
+      ],
+      "id": "da460a5e-943d-4e2e-bc56-481a44c30b62",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        744,
+        232
+      ],
+      "id": "5883c6b8-0e01-4ae7-a289-3e6cdff4e204",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "PJ9S92gwVUYRmyav",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Encontra o texto da resposta do Gemini, onde quer que ele esteja no JSON\nfunction acharTexto(obj) {\n  if (typeof obj === 'string') return obj.includes('frente') ? obj : null;\n  if (obj && typeof obj === 'object') {\n    for (const v of Object.values(obj)) {\n      const r = acharTexto(v);\n      if (r) return r;\n    }\n  }\n  return null;\n}\n\nlet texto = acharTexto($input.first().json);\nif (!texto) throw new Error('Não encontrei os flashcards na resposta do Gemini.');\n\n// Remove eventuais marcações de markdown e isola o array JSON\ntexto = texto.replace(/```json|```/g, '').trim();\nconst inicio = texto.indexOf('[');\nconst fim = texto.lastIndexOf(']');\nconst cards = JSON.parse(texto.slice(inicio, fim + 1));\n\nreturn cards.map(c => ({ json: { frente: c.frente, verso: c.verso } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        0
+      ],
+      "id": "9b84023f-8be1-48b0-a8b7-c3b2a483c6ea",
+      "name": "Formatar cards"
+    },
+    {
+      "parameters": {
+        "options": {
+          "fileName": "flashcards.csv",
+          "headerRow": false
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.2,
+      "position": [
+        1248,
+        0
+      ],
+      "id": "cc86bb11-2866-49f0-896c-dd97c6478411",
+      "name": "Convert to File"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Get many child blocks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many child blocks": {
+      "main": [
+        [
+          {
+            "node": "Juntar texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juntar texto": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Formatar cards",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar cards": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "41156e4c-c846-421a-abcb-0c5b08e6f4b6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "01e46753bfd0501e514e0ea96bc820cb2d19d7eaa9d9abf6ce28069abef23a4a"
+  },
+  "nodeGroups": [],
+  "id": "QZULe82StGoMnYU1",
+  "tags": []
+}
